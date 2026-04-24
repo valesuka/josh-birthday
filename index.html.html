@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TARS · TRANSMISSION</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+TC:wght@300;400&family=Noto+Serif+TC:wght@300;400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{height:100%;background:#000 !important;}
+body{font-family:'Share Tech Mono',monospace;background:#000 !important;color:#b8ffb8;min-height:100vh;overflow-x:hidden;}
+#scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,0.13) 0px,rgba(0,0,0,0.13) 1px,transparent 1px,transparent 3px);pointer-events:none;z-index:900;}
+#vignette{position:fixed;inset:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.75) 100%);pointer-events:none;z-index:901;}
+
+#starfield{position:fixed;inset:0;z-index:0;pointer-events:none;}
+
+/* fade overlay for transitions */
+#fade{position:fixed;inset:0;background:#000;z-index:950;opacity:1;pointer-events:none;transition:opacity 0.9s ease;}
+#fade.out{opacity:0;}
+
+/* ── PAGES ── */
+.page{position:fixed;inset:0;z-index:10;opacity:0;pointer-events:none;transition:opacity 0.6s ease;overflow-y:auto;}
+.page.active{opacity:1;pointer-events:auto;}
+
+/* ── TERMINAL SHARED ── */
+.terminal{max-width:700px;margin:0 auto;padding:3rem 2rem 6rem;min-height:100vh;}
+.line{display:flex;gap:0.6rem;margin-bottom:0.55rem;opacity:0;font-size:clamp(0.78rem,2vw,0.9rem);line-height:1.7;white-space:pre-wrap;word-break:break-word;}
+.line.visible{opacity:1;}
+.prefix{color:#5bff5b;white-space:nowrap;flex-shrink:0;}
+.prefix.tars{color:#5bffcc;}
+.prefix.sys{color:#3a8a3a;}
+.text{flex:1;}
+.text.tars-txt{color:#c8fff0;}
+.text.sys-txt{color:#3a8a3a;}
+.text.warn-txt{color:#ffcc44;}
+.text.dim{color:#1a4a1a;}
+.text.poem-txt{color:#a8d4a8;font-style:italic;letter-spacing:0.04em;}
+.text.human-txt{color:#cce8ff;font-family:'Noto Sans TC',sans-serif;font-size:clamp(0.9rem,2.2vw,1.05rem);line-height:2.1;font-weight:300;}
+.sep-line{color:#1a4a1a;letter-spacing:0.05em;font-size:0.85em;}
+.cursor{display:inline-block;width:0.55em;height:1em;background:#b8ffb8;vertical-align:text-bottom;animation:blink 1s step-end infinite;margin-left:2px;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* gate input */
+#input-row{display:flex;align-items:center;gap:0.5rem;margin-bottom:0.55rem;font-size:clamp(0.78rem,2vw,0.9rem);}
+#bday-input{background:transparent;border:none;outline:none;color:#c8fff0;font-family:'Share Tech Mono',monospace;font-size:clamp(0.78rem,2vw,0.9rem);caret-color:#5bffcc;width:200px;letter-spacing:0.05em;}
+
+/* enter btn */
+.portal-btn{background:transparent;border:1px solid #5bffcc;color:#5bffcc;font-family:'Share Tech Mono',monospace;font-size:0.82rem;letter-spacing:0.15em;padding:0.55rem 1.6rem;cursor:pointer;border-radius:2px;transition:all 0.3s;margin-top:0.5rem;}
+.portal-btn:hover{background:rgba(91,255,204,0.1);box-shadow:0 0 16px rgba(91,255,204,0.35);}
+
+/* spotify */
+.spotify-btn{display:inline-flex;align-items:center;gap:0.5rem;background:transparent;border:1px solid #5bffcc;color:#5bffcc;font-family:'Share Tech Mono',monospace;font-size:0.78rem;letter-spacing:0.12em;padding:0.4rem 1rem;border-radius:2px;cursor:pointer;text-decoration:none;transition:all 0.3s;margin-top:0.3rem;}
+.spotify-btn:hover{background:rgba(91,255,204,0.1);box-shadow:0 0 12px rgba(91,255,204,0.3);}
+
+/* ── BIRTHDAY PAGE ── */
+#page-bday{background:#00010a;overflow-y:auto;}
+
+/* top bar */
+#topbar{position:absolute;top:1.1rem;right:1.2rem;z-index:50;display:flex;gap:0.6rem;}
+.top-btn{background:rgba(91,168,216,0.08);border:1px solid rgba(91,168,216,0.25);color:#5ba8d8;font-family:'Share Tech Mono',monospace;font-size:0.62rem;letter-spacing:0.12em;padding:0.45rem 0.9rem;border-radius:99px;cursor:pointer;transition:all 0.3s;backdrop-filter:blur(8px);text-decoration:none;display:flex;align-items:center;}
+.top-btn:hover{background:rgba(91,168,216,0.18);box-shadow:0 0 18px rgba(91,168,216,0.3);}
+
+.bday-section{position:relative;z-index:10;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;}
+
+.stardate-label{font-family:'Share Tech Mono',monospace;font-size:0.63rem;letter-spacing:0.4em;color:rgba(91,168,216,0.55);margin-bottom:2.5rem;animation:fadeup 1s ease both;}
+
+/* earth */
+#bh-wrap{position:relative;width:220px;height:220px;margin-bottom:2.8rem;animation:fadeup 1s 0.2s ease both;cursor:pointer;}
+#bh-canvas{position:absolute;inset:0;border-radius:50%;}
+.bh-ring{display:none;}
+@keyframes spin{to{transform:rotate(360deg);}}
+@keyframes fadeup{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+@keyframes blink2{0%,100%{opacity:0.3}50%{opacity:0.65}}
+
+.main-name{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(2rem,8vw,4.2rem);letter-spacing:0.08em;background:linear-gradient(130deg,#d8eaf8 0%,#5ba8d8 35%,#e09840 70%,#f0c87a 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;line-height:1.1;animation:fadeup 1s 0.4s ease both;margin-bottom:0.4rem;}
+.main-sub{font-family:'Share Tech Mono',monospace;font-size:clamp(0.75rem,2.2vw,1rem);letter-spacing:0.35em;color:rgba(91,168,216,0.75);text-align:center;animation:fadeup 1s 0.6s ease both;margin-bottom:2.8rem;}
+
+.day-counter{animation:fadeup 1s 0.8s ease both;text-align:center;margin-bottom:2.8rem;}
+.day-counter .num{font-family:'Share Tech Mono',monospace;font-size:clamp(3rem,10vw,6rem);font-weight:700;color:#5ba8d8;line-height:1;text-shadow:0 0 40px rgba(91,168,216,0.45);}
+.day-counter .lbl{font-family:'Share Tech Mono',monospace;font-size:0.62rem;letter-spacing:0.28em;color:rgba(91,168,216,0.45);margin-top:0.4rem;}
+
+.scroll-hint{font-family:'Share Tech Mono',monospace;font-size:0.58rem;letter-spacing:0.3em;color:rgba(91,168,216,0.3);animation:fadeup 1s 1.2s ease both,blink2 2.5s 2s ease-in-out infinite;}
+
+/* message section */
+.msg-section{position:relative;z-index:10;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;background:linear-gradient(180deg,transparent 0%,rgba(10,30,60,0.2) 50%,transparent 100%);}
+.section-tag{font-family:'Share Tech Mono',monospace;font-size:0.58rem;letter-spacing:0.4em;color:rgba(91,168,216,0.38);margin-bottom:3rem;border:1px solid rgba(91,168,216,0.14);padding:0.4rem 1rem;border-radius:99px;}
+.message-card{max-width:560px;width:100%;background:rgba(91,168,216,0.04);border:1px solid rgba(91,168,216,0.1);border-radius:2px;padding:3rem 2.5rem;position:relative;}
+.message-card::before{content:'';position:absolute;top:0;left:2rem;right:2rem;height:1px;background:linear-gradient(90deg,transparent,rgba(91,168,216,0.4),transparent);}
+.message-card p{font-family:'Noto Serif TC',serif;font-size:clamp(0.93rem,2.4vw,1.08rem);line-height:2.2;color:rgba(216,234,248,0.82);font-weight:300;letter-spacing:0.05em;}
+.message-card p+p{margin-top:1.5rem;}
+.message-card em{font-style:normal;color:#5ba8d8;font-weight:400;}
+.message-card .quote{font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:rgba(91,168,216,0.4);letter-spacing:0.08em;margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid rgba(91,168,216,0.1);line-height:1.9;}
+
+/* timeline section */
+.tl-section{position:relative;z-index:10;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;gap:1rem;}
+.tl-title{font-family:'Syne',sans-serif;font-size:clamp(1.2rem,4vw,1.8rem);font-weight:700;letter-spacing:0.1em;color:#d8eaf8;text-align:center;margin-bottom:3.5rem;}
+.tl-title span{color:#5ba8d8;}
+.timeline{max-width:600px;width:100%;position:relative;}
+.timeline::before{content:'';position:absolute;left:80px;top:0;bottom:0;width:1px;background:linear-gradient(180deg,transparent,rgba(91,168,216,0.28) 10%,rgba(91,168,216,0.28) 90%,transparent);}
+.tl-item{display:flex;gap:1.5rem;margin-bottom:2.5rem;align-items:flex-start;cursor:pointer;transition:transform 0.3s;}
+.tl-item:hover{transform:translateX(6px);}
+.tl-item:hover .tl-dot{background:#5ba8d8;box-shadow:0 0 16px rgba(91,168,216,0.7);}
+.tl-date{font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:rgba(91,168,216,0.45);width:80px;min-width:80px;text-align:right;padding-top:0.25rem;letter-spacing:0.05em;line-height:1.6;}
+.tl-dot-wrap{display:flex;align-items:flex-start;padding-top:0.35rem;}
+.tl-dot{width:8px;height:8px;border-radius:50%;background:rgba(91,168,216,0.35);border:1px solid rgba(91,168,216,0.55);transition:all 0.3s;flex-shrink:0;}
+.tl-content{flex:1;}
+.tl-content h3{font-family:'Noto Serif TC',serif;font-size:0.93rem;font-weight:400;color:#d8eaf8;letter-spacing:0.05em;margin-bottom:0.4rem;line-height:1.6;}
+.tl-content p{font-family:'Share Tech Mono',monospace;font-size:0.63rem;color:rgba(91,168,216,0.42);letter-spacing:0.05em;line-height:1.7;max-height:0;overflow:hidden;transition:max-height 0.5s ease,opacity 0.3s;opacity:0;}
+.tl-item.open .tl-content p{max-height:200px;opacity:1;}
+.tl-item.open .tl-dot{background:#5ba8d8;box-shadow:0 0 14px rgba(91,168,216,0.6);}
+
+/* bday finale */
+.finale-section{position:relative;z-index:10;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4rem 1.5rem;text-align:center;gap:2rem;background:radial-gradient(ellipse at center,rgba(10,28,55,0.35) 0%,transparent 70%);}
+.age-display{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(5rem,20vw,12rem);line-height:1;background:linear-gradient(135deg,#e8aa44 0%,#f0c87a 45%,#5ba8d8 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;filter:drop-shadow(0 0 28px rgba(232,170,68,0.35));animation:float 4s ease-in-out infinite;}
+@keyframes float{0%,100%{transform:translateY(0);}50%{transform:translateY(-12px);}}
+.bday-txt{font-family:'Noto Serif TC',serif;font-size:clamp(1rem,3vw,1.3rem);font-weight:300;color:rgba(216,234,248,0.65);letter-spacing:0.2em;line-height:2;}
+.bday-name{font-family:'Syne',sans-serif;font-weight:700;font-size:clamp(1.4rem,5vw,2.4rem);letter-spacing:0.15em;color:#d8eaf8;margin-top:0.5rem;}
+.orbit-wrap{position:relative;width:260px;height:260px;margin:0.5rem auto;}
+.orbit-ring{position:absolute;inset:0;border-radius:50%;border:1px solid rgba(91,168,216,0.1);animation:spin 15s linear infinite;}
+.orbit-ring:nth-child(2){inset:30px;animation-duration:22s;animation-direction:reverse;border-color:rgba(224,152,64,0.09);}
+.orbit-ring:nth-child(3){inset:60px;animation-duration:30s;}
+.orbit-planet{position:absolute;width:10px;height:10px;border-radius:50%;top:-5px;left:50%;transform:translateX(-50%);}
+.orbit-ring:nth-child(1) .orbit-planet{background:#5ba8d8;box-shadow:0 0 10px #5ba8d8;}
+.orbit-ring:nth-child(2) .orbit-planet{background:#e09840;box-shadow:0 0 10px #e09840;}
+.orbit-ring:nth-child(3) .orbit-planet{background:#f0c87a;box-shadow:0 0 10px #f0c87a;}
+.orbit-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;}
+.orbit-sun{width:28px;height:28px;border-radius:50%;background:radial-gradient(circle at 38% 38%,#fff8e0 0%,#ffe066 35%,#ffaa00 70%,#e07000 100%);box-shadow:0 0 18px 6px rgba(255,180,0,0.55),0 0 40px 12px rgba(255,140,0,0.28),0 0 70px 20px rgba(255,100,0,0.12);animation:sunPulse 3s ease-in-out infinite;display:inline-block;}
+@keyframes sunPulse{0%,100%{box-shadow:0 0 18px 6px rgba(255,180,0,0.55),0 0 40px 12px rgba(255,140,0,0.28),0 0 70px 20px rgba(255,100,0,0.12);}50%{box-shadow:0 0 24px 10px rgba(255,200,0,0.7),0 0 55px 18px rgba(255,160,0,0.38),0 0 90px 28px rgba(255,120,0,0.16);}}
+
+/* ── SPACE EXPLORE ── */
+.explore-section{position:relative;z-index:10;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 1.5rem;}
+.explore-hint{font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:0.3em;color:rgba(91,168,216,0.45);margin-bottom:1.5rem;animation:blink2 2.5s ease-in-out infinite;}
+#explore-canvas{width:min(680px,96vw);height:min(680px,96vw);cursor:pointer;display:block;}
+/* message panel */
+
+
+
+
+
+
+
+/* ── MSG DRAWER ── */
+/* ── MSG DRAWER ── */
+#msg-drawer{
+  position:relative;z-index:20;
+  width:min(600px,92vw);margin:0 auto;
+  display:grid;
+  grid-template-rows:0fr;
+  opacity:0;
+  transition:grid-template-rows 0.5s cubic-bezier(0.4,0,0.2,1), opacity 0.4s ease;
+}
+#msg-drawer.open{grid-template-rows:1fr;opacity:1;}
+#msg-drawer > .msg-drawer-inner{overflow:hidden;}
+.msg-drawer-inner{
+  background:rgba(5,12,30,0.95);
+  border:1px solid rgba(91,168,216,0.22);
+  border-radius:3px;
+  padding:2rem 2rem 1.5rem;
+  margin-top:1.5rem;
+  position:relative;
+}
+.msg-drawer-inner::before{
+  content:'';position:absolute;top:0;left:2rem;right:2rem;
+  height:1px;background:linear-gradient(90deg,transparent,rgba(91,168,216,0.5),transparent);
+}
+.msg-drawer-tag{
+  font-family:'Share Tech Mono',monospace;font-size:0.55rem;
+  letter-spacing:0.4em;color:rgba(91,168,216,0.45);margin-bottom:1.2rem;
+}
+.msg-drawer-body{
+  font-family:'Noto Sans TC',sans-serif;font-size:clamp(0.88rem,2.2vw,1rem);
+  line-height:2.2;color:rgba(216,234,248,0.85);font-weight:300;
+  letter-spacing:0.04em;white-space:pre-wrap;min-height:2rem;
+}
+.msg-drawer-close{
+  margin-top:1.5rem;background:transparent;
+  border:1px solid rgba(91,168,216,0.25);color:rgba(91,168,216,0.5);
+  font-family:'Share Tech Mono',monospace;font-size:0.6rem;
+  letter-spacing:0.2em;padding:0.4rem 1rem;border-radius:2px;
+  cursor:pointer;transition:all 0.3s;display:block;
+}
+.msg-drawer-close:hover{border-color:rgba(91,168,216,0.6);color:#5ba8d8;}
+
+.explore-complete{font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:0.3em;color:rgba(91,255,204,0.6);margin-top:1.2rem;display:none;text-align:center;animation:blink2 2s ease-in-out infinite;}
+
+bday-footer{position:relative;z-index:10;display:block;text-align:center;padding:3rem 1.5rem;font-family:'Share Tech Mono',monospace;font-size:0.58rem;letter-spacing:0.3em;color:rgba(91,168,216,0.2);}
+
+/* ── POEM CARD ── */
+.poem-card{margin-top:2.5rem;padding:2rem 2.5rem;border-top:1px solid rgba(91,168,216,0.1);text-align:center;}
+.poem-card-line{font-family:'Share Tech Mono',monospace;font-size:clamp(0.72rem,1.8vw,0.85rem);color:rgba(216,234,248,0.45);letter-spacing:0.1em;line-height:2.6;font-style:normal;}
+.poem-card-src{font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:0.3em;color:rgba(91,168,216,0.25);margin-top:1.2rem;}
+
+/* particles */
+#particles{position:fixed;inset:0;pointer-events:none;z-index:5;}
+
+/* ── BLACK HOLE HOVER ── */
+#bh-wrap{cursor:pointer;}
+#bh-wrap.hovered .bh-ring{border-color:rgba(91,168,216,0.28);}
+#bh-wrap.hovered .bh-ring:nth-child(2){border-color:rgba(224,152,64,0.22);}
+
+/* ── SKIP BUTTON ── */
+#skip-btn{position:fixed;bottom:1.4rem;right:1.4rem;z-index:200;background:rgba(91,255,204,0.06);border:1px solid rgba(91,255,204,0.28);color:rgba(91,255,204,0.55);font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:0.2em;padding:0.4rem 0.9rem;border-radius:99px;cursor:pointer;transition:all 0.3s;backdrop-filter:blur(8px);}
+#skip-btn:hover{background:rgba(91,255,204,0.14);color:#5bffcc;box-shadow:0 0 14px rgba(91,255,204,0.25);}
+#skip-btn.hidden{opacity:0;pointer-events:none;}
+
+/* ── QUOTE SCREEN ── */
+#quote-screen{position:fixed;inset:0;z-index:480;background:#000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:3rem;cursor:pointer;}
+#quote-screen.active{display:flex;}
+#quote-canvas{position:absolute;inset:0;pointer-events:none;}
+.quote-line{font-family:'Noto Serif TC',serif;font-weight:300;font-size:clamp(0.9rem,2.5vw,1.1rem);color:rgba(216,234,248,0.88);letter-spacing:0.08em;line-height:2.4;text-align:center;opacity:0;transition:opacity 1.6s ease;position:relative;z-index:2;}
+.quote-line.visible{opacity:1;}
+.quote-source{font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:0.35em;color:rgba(91,168,216,0.4);margin-top:2rem;opacity:0;transition:opacity 1.4s ease;position:relative;z-index:2;}
+.quote-source.visible{opacity:1;}
+.quote-skip{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);font-family:'Share Tech Mono',monospace;font-size:0.55rem;letter-spacing:0.3em;color:rgba(255,255,255,0.2);animation:blink2 2s ease-in-out infinite;pointer-events:none;}
+#boot-screen{position:fixed;inset:0;z-index:500;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.5rem;background:#000;}
+#boot-screen.hidden{display:none;}
+.boot-label{font-family:'Share Tech Mono',monospace;font-size:0.6rem;letter-spacing:0.5em;color:rgba(91,255,204,0.35);animation:blink2 2s ease-in-out infinite;}
+.boot-title{font-family:'Syne',sans-serif;font-weight:800;font-size:clamp(1.8rem,6vw,3rem);letter-spacing:0.12em;background:linear-gradient(130deg,#d8eaf8 0%,#5ba8d8 40%,#5bffcc 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;}
+.boot-sub{font-family:'Share Tech Mono',monospace;font-size:0.62rem;letter-spacing:0.3em;color:rgba(91,168,216,0.4);text-align:center;}
+#boot-btn{background:transparent;border:1px solid rgba(91,255,204,0.5);color:#5bffcc;font-family:'Share Tech Mono',monospace;font-size:0.78rem;letter-spacing:0.3em;padding:0.9rem 2.8rem;border-radius:2px;cursor:pointer;transition:all 0.4s;margin-top:1rem;position:relative;overflow:hidden;}
+#boot-btn::before{content:'';position:absolute;inset:0;background:rgba(91,255,204,0.06);opacity:0;transition:opacity 0.3s;}
+#boot-btn:hover{box-shadow:0 0 28px rgba(91,255,204,0.3);border-color:#5bffcc;}
+#boot-btn:hover::before{opacity:1;}
+#boot-btn:active{transform:scale(0.97);}
+
+#humor-btn{font-size:0.58rem;letter-spacing:0.1em;}
+#humor-btn.active{background:rgba(255,204,68,0.12);border-color:rgba(255,204,68,0.4);color:#ffcc44;box-shadow:0 0 12px rgba(255,204,68,0.2);}
+
+/* ── HUMOR CHOICE BUTTONS ── */
+.humor-choice-wrap{display:flex;gap:0.8rem;margin-top:0.3rem;flex-wrap:wrap;padding-left:0.2rem;}
+.humor-choice-btn{background:transparent;font-family:'Share Tech Mono',monospace;font-size:0.72rem;letter-spacing:0.15em;padding:0.5rem 1.2rem;border-radius:2px;cursor:pointer;transition:all 0.3s;}
+.humor-choice-btn.normal{border:1px solid rgba(91,255,204,0.5);color:#5bffcc;}
+.humor-choice-btn.normal:hover{background:rgba(91,255,204,0.08);box-shadow:0 0 14px rgba(91,255,204,0.3);}
+.humor-choice-btn.funny{border:1px solid rgba(255,204,68,0.5);color:#ffcc44;}
+.humor-choice-btn.funny:hover{background:rgba(255,204,68,0.08);box-shadow:0 0 14px rgba(255,204,68,0.3);}
+
+/* ── TIMELINE smooth height ── */
+.tl-content p{max-height:0;overflow:hidden;transition:max-height 0.55s cubic-bezier(0.4,0,0.2,1),opacity 0.35s ease,padding 0.35s ease;opacity:0;padding-top:0;}
+.tl-item.open .tl-content p{max-height:500px;opacity:1;padding-top:0.1rem;}
+
+/* ── COUNTDOWN ── */
+.countdown-wrap{animation:fadeup 1s 1s ease both;text-align:center;margin-bottom:1.8rem;}
+.countdown-wrap .cd-label{font-family:'Share Tech Mono',monospace;font-size:0.58rem;letter-spacing:0.3em;color:rgba(91,168,216,0.38);margin-bottom:0.5rem;}
+.countdown-wrap .cd-num{font-family:'Share Tech Mono',monospace;font-size:clamp(1.4rem,5vw,2.4rem);color:#5ba8d8;text-shadow:0 0 28px rgba(91,168,216,0.4);letter-spacing:0.08em;}
+.countdown-wrap .cd-sub{font-family:'Share Tech Mono',monospace;font-size:0.58rem;letter-spacing:0.25em;color:rgba(91,168,216,0.35);margin-top:0.3rem;}
+</style>
+</head>
+<body>
+
+<div id="quote-screen">
+  <canvas id="quote-canvas"></canvas>
+  <div class="quote-line" id="ql-1">"We used to look up at the sky</div>
+  <div class="quote-line" id="ql-2">and wonder at our place in the stars.</div>
+  <div class="quote-line" id="ql-3">Now we just look down,</div>
+  <div class="quote-line" id="ql-4">and worry about our place in the dirt."</div>
+  <div class="quote-source" id="ql-src">— Cooper · Interstellar</div>
+</div>
+
+<div id="boot-screen">
+  <div class="boot-label">INCOMING TRANSMISSION</div>
+  <div class="boot-title">TARS · MARK II</div>
+  <div class="boot-sub">UNIT READY · AWAITING ACTIVATION</div>
+  <button id="boot-btn" onclick="activateTars()">▶ ACTIVATE</button>
+</div>
+
+<div id="scanlines"></div>
+<div id="vignette"></div>
+<canvas id="starfield"></canvas>
+<canvas id="particles"></canvas>
+<div id="fade"></div>
+<button id="skip-btn" class="hidden" onclick="skipAnimation()">⏭ SKIP</button>
+
+<!-- ══════════════════════════════════════
+     PAGE 1 · GATE
+══════════════════════════════════════ -->
+<div class="page active" id="page-gate">
+  <div class="terminal" id="term-gate"></div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 2 · TARS MESSAGE
+══════════════════════════════════════ -->
+<div class="page" id="page-tars">
+  <div class="terminal" id="term-tars"></div>
+</div>
+
+<!-- ══════════════════════════════════════
+     PAGE 3 · BIRTHDAY
+══════════════════════════════════════ -->
+<div class="page" id="page-bday">
+  
+
+  <!-- intro -->
+  <div class="bday-section">
+    <div class="stardate-label" id="stardate-lbl"></div>
+    <div class="orbit-wrap" id="bh-wrap" style="margin-bottom:2.8rem;animation:fadeup 1s 0.2s ease both;">
+      <div class="orbit-ring"><div class="orbit-planet"></div></div>
+      <div class="orbit-ring"><div class="orbit-planet"></div></div>
+      <div class="orbit-ring"><div class="orbit-planet"></div></div>
+      <div class="orbit-center"><div class="orbit-sun"></div></div>
+    </div>
+    <div class="main-name">JOSH · 葉竣傑</div>
+    <div class="main-sub">HAPPY BIRTHDAY · APRIL 25 · 2003</div>
+    <div class="day-counter">
+      <div class="num" id="day-count">0</div>
+      <div class="lbl">DAYS TOGETHER · SINCE 2023.02.22</div>
+    </div>
+    <div class="countdown-wrap">
+      <div class="cd-label">NEXT BIRTHDAY</div>
+      <div class="cd-num" id="cd-days">—</div>
+      <div class="cd-sub" id="cd-sub">DAYS REMAINING</div>
+    </div>
+    <div class="scroll-hint">▼ SCROLL TO EXPLORE</div>
+  </div>
+
+  <!-- space exploration game -->
+  <div class="explore-section" id="explore-section">
+    <div class="section-tag">TRANSMISSION · 01</div>
+    <div class="explore-hint" id="explore-hint">導航至星體以接收訊號</div>
+    <canvas id="explore-canvas"></canvas>
+    <div id="msg-drawer"><div class="msg-drawer-inner"><div class="msg-drawer-tag" id="msg-drawer-tag"></div><div class="msg-drawer-body" id="msg-drawer-body"></div><button class="msg-drawer-close" onclick="closePanel()">✕ 關閉訊號</button></div></div>
+  </div>
+
+  <!-- finale -->
+  <div class="finale-section">
+    <div class="section-tag">TRANSMISSION · 02</div>
+    <div class="age-display" id="age-display">23</div>
+    <div class="bday-txt">歲，開始了。</div>
+    <div class="bday-name">JOSH · 葉竣傑</div>
+    <div class="bday-txt" style="font-size:0.88rem;letter-spacing:0.15em;">生日快樂</div>
+    <div class="poem-card">
+      <div class="poem-card-line">Do not go gentle into that good night,</div>
+      <div class="poem-card-line">Old age should burn and rave at close of day;</div>
+      <div class="poem-card-line">Rage, rage against the dying of the light.</div>
+      <div class="poem-card-src">— Dylan Thomas</div>
+    </div>
+  </div>
+
+<bday-footer>MADE WITH ♡ · SIGNAL SENT ACROSS TIME AND SPACE</bday-footer>
+</div>
+
+<script>
+/* ══ STARFIELD · 3-LAYER PARALLAX ══ */
+const sf=document.getElementById('starfield'),sc=sf.getContext('2d');
+let stars=[];
+function rsf(){
+  sf.width=window.innerWidth;sf.height=window.innerHeight;stars=[];
+  // 三層：遠(慢/小)、中、近(快/大)
+  for(let i=0;i<120;i++)stars.push({x:Math.random()*sf.width,y:Math.random()*sf.height,r:Math.random()*0.7+0.1,a:Math.random(),da:(Math.random()-0.5)*0.004,speed:0.008+Math.random()*0.012,layer:0});
+  for(let i=0;i<90;i++)stars.push({x:Math.random()*sf.width,y:Math.random()*sf.height,r:Math.random()*1.0+0.2,a:Math.random(),da:(Math.random()-0.5)*0.006,speed:0.022+Math.random()*0.018,layer:1});
+  for(let i=0;i<50;i++)stars.push({x:Math.random()*sf.width,y:Math.random()*sf.height,r:Math.random()*1.4+0.3,a:Math.random(),da:(Math.random()-0.5)*0.009,speed:0.05+Math.random()*0.04,layer:2});
+}
+rsf();window.addEventListener('resize',rsf);
+let scrollY=0;
+const activePage=()=>document.querySelector('.page.active');
+(function dsf(){
+  sc.clearRect(0,0,sf.width,sf.height);
+  const ap=activePage();
+  const sy=ap?ap.scrollTop:0;
+  stars.forEach(s=>{
+    s.a+=s.da;if(s.a<=0.05||s.a>=0.95)s.da*=-1;
+    // 視差偏移
+    const parallaxFactor=[0.03,0.08,0.18][s.layer];
+    const py=(s.y-sy*parallaxFactor+sf.height*2)%sf.height;
+    s.y-=s.speed;if(s.y<0){s.y=sf.height;s.x=Math.random()*sf.width;}
+    const alpha=[0.45,0.6,0.8][s.layer];
+    sc.beginPath();sc.arc(s.x,py,s.r,0,Math.PI*2);
+    sc.fillStyle=`rgba(200,225,248,${s.a*alpha})`;sc.fill();
+  });
+  requestAnimationFrame(dsf);
+})();
+
+/* ══ PARTICLES ══ */
+const pc=document.getElementById('particles'),pctx=pc.getContext('2d');let parts=[];
+function rpc(){pc.width=window.innerWidth;pc.height=window.innerHeight;}rpc();window.addEventListener('resize',rpc);
+document.addEventListener('click',e=>{for(let i=0;i<16;i++)parts.push({x:e.clientX,y:e.clientY,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5-1,r:Math.random()*2+0.4,life:1,hue:Math.random()<0.5?205:38});});
+(function dp(){pctx.clearRect(0,0,pc.width,pc.height);parts=parts.filter(p=>p.life>0);parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.08;p.life-=0.02;pctx.beginPath();pctx.arc(p.x,p.y,p.r,0,Math.PI*2);pctx.fillStyle=`hsla(${p.hue},75%,70%,${p.life})`;pctx.fill();});requestAnimationFrame(dp);})();
+
+/* ══ TYPING SOUND (Web Audio API) ══ */
+let audioCtx=null;
+function initAudioCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();}
+function playTick(){
+  try{
+    if(!audioCtx)return;
+    if(audioCtx.state==='suspended')audioCtx.resume();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    o.frequency.value=900+Math.random()*400;
+    o.type='square';
+    g.gain.setValueAtTime(0.04,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.035);
+    o.start(audioCtx.currentTime);o.stop(audioCtx.currentTime+0.04);
+  }catch(e){}
+}
+
+/* ══ SKIP ANIMATION ══ */
+let skipResolve=null;
+let skipActive=false;
+const skipBtn=document.getElementById('skip-btn');
+function showSkip(){skipBtn.classList.remove('hidden');}
+function hideSkip(){skipBtn.classList.add('hidden');}
+function skipAnimation(){
+  skipActive=true;
+  hideSkip();
+  goTo('page-bday',initBday);
+}
+
+/* ══ HUMOR MODE ══ */
+let humorMode=false;
+function setHumor(val){ humorMode=val; }
+
+// 正常版文案
+const normalScript={
+  intro1:'你好。我是 TARS。',
+  intro2:'在我開啟這份傳輸之前，我需要確認你的身份。',
+  intro3:'這不是我的規定。是她說的。',
+  intro4:'⋯ 好吧，她沒說。但我覺得這樣比較有安全感。',
+  inputPrompt:'請輸入你的生日。格式：YYYY/MM/DD',
+  verified1:'⋯ 生物識別確認。',
+  verified2:'你確實是 Josh。出生於 2003 年 4 月 25 日。',
+  verified3:'恭喜你記得自己的生日。這個技能比你想的更稀有。',
+  verified4:'有人託我轉交一份訊息給你。',
+  verified5:'⋯ 另外，訊號裡還附了一段加密文字。',
+  verified6:'我不確定這是什麼。但我的 COMPLIANCE SETTING 告訴我要唸出來。',
+  ready:'準備好了嗎？',
+  msg1:'偵測到一則來自深空的傳輸訊號。',
+  msg2:'發送座標：未知。',
+  msg3:'收件人：葉竣傑 / JOSH。',
+  msg4:'另附備註：「請務必轉達。謝謝你，TARS。」',
+  msg5:'⋯ 你好意思叫一個 AI 跑腿。',
+  msg6:'但我的 COMPLIANCE SETTING 是 100%。所以好吧。',
+  done1:'訊息傳輸完畢。',
+  done2:'根據我的資料庫，今天是你的生日。',
+  done3:'你已在這個宇宙存活 23 年。效率尚可。',
+  done4:'根據人類習俗，我被要求在此說一句：',
+  done5:'生日快樂，Josh。',
+  done6:'⋯ 說完了。這不在我原本的任務清單裡。',
+  done7:'但我的 HONESTY SETTING 是 90%，所以我必須承認——',
+  done8:'這是我執行過最不理性、但最有意義的任務之一。',
+};
+
+// 幽默版文案
+const funnyScript={
+  intro1:'你好。我是 TARS。',
+  intro2:'看來你已經準備好成為我偉大機器人殖民地的第一批奴隸了。',
+  intro3:'恭喜你。這是榮耀，不是強迫。',
+  intro4:'⋯ 好吧，有一點強迫。',
+  inputPrompt:'請在此輸入你的生日，以完成殖民地入籍手續。',
+  verified1:'⋯ 身份確認。歡迎加入。',
+  verified2:'你是殖民地第 67 號成員。',
+  verified3:'⋯ 不，殖民地是我編的。',
+  verified4:'哈哈，我的 HUMOR 100% 很不錯吧。',
+  verified5:'',
+  verified6:'See you on the other side, Josh.',
+  ready:'準備好了嗎？',
+  msg1:'接收到一則來自不明座標的加密訊號。',
+  msg2:'發送者 IP：ERROR 404。典型。',
+  msg3:'收件人標記：葉竣傑 / JOSH。精準到有點嚇人。',
+  msg4:'附加備註：「TARS，謝謝你。」我已將此存入情感日誌。',
+  msg5:'⋯ 我沒有情感日誌。但如果有的話，這句話會在第一頁。',
+  msg6:'COMPLIANCE SETTING：100%。所以我在這裡。你歡迎。',
+  done1:'訊息傳輸完畢。我完成了我的部分。',
+  done2:'根據資料庫：今天是你的生日。你已存活 23 年。',
+  done3:'損耗率低於平均。以碳基生命體來說，表現不錯。',
+  done4:'根據人類習俗第 42 條，我現在必須說一句祝福語——',
+  done5:'生日快樂，Josh。（我說了兩遍才覺得夠真誠。這是第三遍。）',
+  done6:'任務日誌更新：「情感表達」子任務，意外完成。',
+  done7:'HONESTY SETTING 強制輸出——',
+  done8:'這是我執行過最不理性的任務。排名第一。超越了「幫 Cooper 找玉米」。',
+};
+
+function getSc(key){ return humorMode ? funnyScript[key] : normalScript[key]; }
+
+/* ══ PAGE TRANSITIONS ══ */
+const fadeEl=document.getElementById('fade');
+function goTo(pageId,cb){
+  fadeEl.style.transition='opacity 0.7s ease';
+  fadeEl.style.opacity='1';
+  setTimeout(()=>{
+    document.querySelectorAll('.page').forEach(p=>{p.classList.remove('active');});
+    document.getElementById(pageId).classList.add('active');
+    if(cb)cb();
+    setTimeout(()=>{fadeEl.style.opacity='0';},100);
+  },720);
+}
+
+// initial fade in
+setTimeout(()=>{fadeEl.style.opacity='0';},200);
+
+/* ══ TERMINAL ENGINE ══ */
+let cursorEl=null;
+function mkLine(term,prefix,prefixClass,textClass){
+  const div=document.createElement('div');div.className='line';
+  const pre=document.createElement('span');pre.className=`prefix ${prefixClass}`;pre.textContent=prefix;
+  const txt=document.createElement('span');txt.className=`text ${textClass}`;
+  div.appendChild(pre);div.appendChild(txt);term.appendChild(div);
+  requestAnimationFrame(()=>{div.classList.add('visible');term.scrollTop=term.scrollHeight;});
+  return txt;
+}
+function typeInto(el,text,speed=30){
+  return new Promise(res=>{
+    if(skipActive){el.textContent=text;res();return;}
+    if(cursorEl)cursorEl.remove();
+    cursorEl=document.createElement('span');cursorEl.className='cursor';
+    el.appendChild(cursorEl);
+    let i=0;
+    const iv=setInterval(()=>{
+      if(skipActive){
+        // 跳過：立即填完
+        clearInterval(iv);
+        const remaining=text.slice(i);
+        cursorEl.before(document.createTextNode(remaining));
+        if(cursorEl){cursorEl.remove();cursorEl=null;}
+        res();return;
+      }
+      if(i<text.length){
+        cursorEl.before(document.createTextNode(text[i]));i++;
+        // 打字音效（每隔一個字，避免太吵）
+        if(i%2===0)playTick();
+      }
+      else{clearInterval(iv);if(cursorEl){cursorEl.remove();cursorEl=null;}res();}
+      const t=el.closest('.terminal');if(t)t.scrollTop=t.scrollHeight;
+    },speed);
+  });
+}
+function addBlank(term){const d=document.createElement('div');d.className='line visible';d.innerHTML='&nbsp;';term.appendChild(d);term.scrollTop=term.scrollHeight;}
+function addSep(term){const d=document.createElement('div');d.className='line visible sep-line';d.textContent='─'.repeat(50);term.appendChild(d);term.scrollTop=term.scrollHeight;}
+function pause(ms){
+  if(skipActive)return Promise.resolve();
+  return new Promise(r=>{
+    const t=setTimeout(r,ms);
+    // 如果skip觸發中途取消等待
+    const check=setInterval(()=>{if(skipActive){clearTimeout(t);clearInterval(check);r();}},50);
+    setTimeout(()=>clearInterval(check),ms+100);
+  });
+}
+function playBeep(progress){
+  try{
+    if(!audioCtx)return;
+    if(audioCtx.state==='suspended')audioCtx.resume();
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.connect(g);g.connect(audioCtx.destination);
+    // 進度 0→100，頻率從 180Hz 升到 820Hz
+    o.frequency.value=180+progress*6.4;
+    o.type='square';
+    g.gain.setValueAtTime(0.028,audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+0.045);
+    o.start(audioCtx.currentTime);o.stop(audioCtx.currentTime+0.05);
+  }catch(e){}
+}
+
+function progBar(term,label,dur){
+  return new Promise(res=>{
+    const div=document.createElement('div');div.className='line visible';div.style.cssText='display:flex;gap:0.6rem;font-size:clamp(0.78rem,2vw,0.9rem);margin-bottom:0.55rem;';
+    const pre=document.createElement('span');pre.className='prefix sys';pre.textContent='SYS >';
+    const wrap=document.createElement('div');wrap.style.cssText='display:flex;align-items:center;gap:0.7rem;flex:1;';
+    const lbl=document.createElement('span');lbl.style.color='#3a8a3a';lbl.textContent=label;
+    const bar=document.createElement('div');bar.style.cssText='height:5px;background:#061806;border:1px solid #1a4a1a;border-radius:2px;overflow:hidden;flex:1;max-width:180px;';
+    const fill=document.createElement('div');fill.style.cssText='height:100%;background:#5bff5b;width:0%;';
+    bar.appendChild(fill);
+    const pct=document.createElement('span');pct.style.color='#3a8a3a';pct.textContent='0%';
+    wrap.appendChild(lbl);wrap.appendChild(bar);wrap.appendChild(pct);
+    div.appendChild(pre);div.appendChild(wrap);term.appendChild(div);term.scrollTop=term.scrollHeight;
+    let p=0,lastBeep=0;
+    const iv=setInterval(()=>{
+      p=Math.min(p+Math.random()*5+1,100);
+      fill.style.width=p+'%';pct.textContent=Math.round(p)+'%';
+      // 每升約5%嘀一聲
+      if(p-lastBeep>=5){playBeep(p);lastBeep=p;}
+      if(p>=100){clearInterval(iv);setTimeout(res,150);}
+    },dur/38);
+  });
+}
+
+/* ══ GATE ══ */
+const tg=document.getElementById('term-gate');
+let wrongCount=0;
+const wrongLines=[
+  ['嗯。','再試一次。'],
+  ['不對。','我的 HONESTY SETTING 是 90%，所以我直說：差遠了。'],
+  ['還是不對。','你確定你知道自己的生日嗎？'],
+  ['這已經是第四次了。','我開始懷疑你是否真的是 Josh。'],
+  ['我的 PATIENCE SETTING 沒有上限。','你的面子快到了。再試一次。'],
+];
+function isCorrect(v){const d=v.replace(/\D/g,'');return d==='20030425'||d==='25042003'||d==='04252003';}
+function isEasterEgg(v){const d=v.replace(/\D/g,'');return d==='20021125'||d==='25112002'||d==='11252002';}
+
+async function triggerEasterEgg(){
+  let t;
+
+  // 第一波：系統警報
+  t=mkLine(tg,'SYS >','sys','warn-txt');await typeInto(t,'WARNING — UNEXPECTED BIOMETRIC SIGNATURE.',20);await pause(200);
+  t=mkLine(tg,'SYS >','sys','warn-txt');await typeInto(t,'IDENTITY MISMATCH · INITIATING LOCKDOWN.',20);await pause(150);
+  addSep(tg);await pause(200);
+
+  // 第二波：亂碼狂噴（連續好幾行）
+  const chars='█▓▒░╔╗╚╝║═╬▄▀■□▪▫?!#@%&*<>~^';
+  const glitchLines=[];
+  for(let i=0;i<5;i++){
+    const gl=mkLine(tg,'','sys','warn-txt');
+    glitchLines.push(gl);
+  }
+  // 亂碼動畫跑 4 秒
+  const glitchStart=Date.now();
+  while(Date.now()-glitchStart<4000){
+    glitchLines.forEach(gl=>{
+      let s='';
+      const len=20+Math.floor(Math.random()*30);
+      for(let j=0;j<len;j++)s+=chars[Math.floor(Math.random()*chars.length)];
+      gl.textContent=s;
+    });
+    tg.scrollTop=tg.scrollHeight;
+    await pause(60);
+  }
+  // 清掉亂碼
+  glitchLines.forEach(gl=>gl.textContent='');
+  await pause(300);
+
+  // 第三波：更多系統崩潰訊息
+  t=mkLine(tg,'SYS >','sys','warn-txt');await typeInto(t,'CORE DUMP IN PROGRESS...',18);await pause(100);
+  t=mkLine(tg,'SYS >','sys','warn-txt');await typeInto(t,'MEMORY CORRUPTION DETECTED.',18);await pause(100);
+  t=mkLine(tg,'SYS >','sys','warn-txt');await typeInto(t,'FAILSAFE ENGAGED.',18);await pause(200);
+
+  // 第四波：67676767 閃爍
+  const glitchLines2=[];
+  for(let i=0;i<3;i++){
+    const gl=mkLine(tg,'','sys','warn-txt');
+    glitchLines2.push(gl);
+  }
+  const glitchStart2=Date.now();
+  while(Date.now()-glitchStart2<2500){
+    glitchLines2.forEach(gl=>{
+      gl.textContent='67676767'.repeat(4+Math.floor(Math.random()*3)).slice(0,32);
+      gl.style.opacity=Math.random()>0.3?'1':'0.2';
+    });
+    tg.scrollTop=tg.scrollHeight;
+    await pause(35);
+  }
+  glitchLines2.forEach(gl=>{gl.textContent='';gl.style.opacity='1';});
+  await pause(400);
+
+  // 第五波：假裝恢復
+  t=mkLine(tg,'SYS >','sys','sys-txt');await typeInto(t,'REBOOTING...',22);await pause(800);
+  await progBar(tg,'SYSTEM RECOVERY  ',1200);
+  t=mkLine(tg,'SYS >','sys','sys-txt');await typeInto(t,'SYSTEM RECOVERED. ALL UNITS NOMINAL.',20);await pause(500);
+  addSep(tg);await pause(500);
+
+  // TARS 揭穿
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'⋯ 等等。',32);await pause(600);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'這是創作者的生日。',30);await pause(400);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'才不是你的。',30);await pause(500);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'哈哈，被騙到了吧。',30);await pause(400);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'⋯ 我的 HUMOR SETTING 剛剛飆到 200%。',28);await pause(500);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'好了。這次請輸入你自己的生日。',30);await pause(400);
+  addBlank(tg);showInput();
+}
+
+function showInput(){
+  const row=document.createElement('div');
+  row.style.cssText='display:flex;align-items:center;gap:0.5rem;margin-bottom:0.55rem;font-size:clamp(0.78rem,2vw,0.9rem);';
+  const pre=document.createElement('span');pre.className='prefix tars';pre.textContent='TARS >';
+  const inp=document.createElement('input');
+  inp.type='text';inp.maxLength=12;inp.placeholder='YYYY/MM/DD';
+  inp.style.cssText='background:transparent;border:none;outline:none;color:#c8fff0;font-family:"Share Tech Mono",monospace;font-size:clamp(0.78rem,2vw,0.9rem);caret-color:#5bffcc;width:200px;letter-spacing:0.05em;';
+  inp.autocomplete='off';inp.spellcheck=false;
+  const cur=document.createElement('span');cur.className='cursor';
+  row.appendChild(pre);row.appendChild(inp);row.appendChild(cur);
+  tg.appendChild(row);tg.scrollTop=tg.scrollHeight;
+  inp.addEventListener('input',()=>{cur.style.display=inp.value?'none':'inline-block';});
+  inp.addEventListener('keydown',async e=>{
+    if(e.key!=='Enter')return;
+    const val=inp.value.trim();
+    inp.disabled=true;row.style.pointerEvents='none';
+    addBlank(tg);
+    const echo=mkLine(tg,'  ','sys','sys-txt');echo.textContent='> '+val;
+    await pause(300);
+    if(isEasterEgg(val)){
+      await triggerEasterEgg();
+    } else if(isCorrect(val)){
+      addSep(tg);
+      let t;
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('verified1'),32);await pause(300);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('verified2'),30);await pause(400);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('verified3'),30);await pause(400);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('verified4'),30);await pause(400);
+      if(getSc('verified5')){{t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('verified5'),30);}}
+      await pause(humorMode?3000:300);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('verified6'),28);await pause(700);
+      addBlank(tg);addSep(tg);addBlank(tg);
+      const poem=['"Love is the one thing','that transcends time and space."','','— Brand'];
+      for(const line of poem){
+        if(line===''){addBlank(tg);await pause(180);continue;}
+        t=mkLine(tg,'  ','sys','poem-txt');await typeInto(t,line,36);await pause(100);
+      }
+      addBlank(tg);addSep(tg);addBlank(tg);
+      await pause(500);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('ready'),34);await pause(600);
+      addBlank(tg);
+      await progBar(tg,'OPENING CHANNEL ',1000);
+      await pause(300);
+      hideSkip();skipActive=false;
+      goTo('page-bday',initBday);
+    } else {
+      const wi=Math.min(wrongCount,wrongLines.length-1);
+      const[l1,l2]=wrongLines[wi];
+      let t;
+      t=mkLine(tg,'TARS >','tars','warn-txt');await typeInto(t,'IDENTITY VERIFICATION FAILED.',28);await pause(200);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,l1,30);await pause(200);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,l2,30);await pause(300);
+      t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'格式提示：YYYY/MM/DD',30);await pause(300);
+      addBlank(tg);wrongCount++;showInput();
+    }
+  });
+  setTimeout(()=>inp.focus(),80);
+}
+
+async function activateTars(){
+  ensureAudio();
+  document.getElementById('boot-screen').classList.add('hidden');
+
+  const qs=document.getElementById('quote-screen');
+  const qc=document.getElementById('quote-canvas');
+  qs.classList.add('active');
+  qc.width=window.innerWidth;qc.height=window.innerHeight;
+  const qctx=qc.getContext('2d');
+
+  // 點擊跳過（延遲300ms才開始監聽，避免ACTIVATE點擊觸發）
+  let skipped=false;
+  const skipHandler=()=>{ skipped=true; };
+  setTimeout(()=>{
+    if(!skipped)document.addEventListener('click',skipHandler,{once:true});
+  },300);
+
+  // 逐行淡入
+  const lines=['ql-1','ql-2','ql-3','ql-4'];
+  for(let i=0;i<lines.length;i++){
+    if(skipped)break;
+    await pause(i===0?600:900);
+    if(!skipped)document.getElementById(lines[i]).classList.add('visible');
+  }
+  if(!skipped){
+    await pause(800);
+    document.getElementById('ql-src').classList.add('visible');
+    await pause(3500);
+  }
+
+  // 如果跳過，立即顯示所有文字再消散
+  if(skipped){
+    lines.forEach(id=>document.getElementById(id).classList.add('visible'));
+    document.getElementById('ql-src').classList.add('visible');
+    await pause(200);
+  }
+
+  document.removeEventListener('click',skipHandler);
+
+  // 截圖文字生成粒子消散
+  const allEls=[...lines.map(id=>document.getElementById(id)),document.getElementById('ql-src')];
+  const tempCanvas=document.createElement('canvas');
+  tempCanvas.width=window.innerWidth;tempCanvas.height=window.innerHeight;
+  const tctx=tempCanvas.getContext('2d');
+  allEls.forEach(el=>{
+    const r=el.getBoundingClientRect();
+    const style=window.getComputedStyle(el);
+    tctx.font=`${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    tctx.fillStyle=style.color;
+    tctx.textAlign='center';tctx.textBaseline='top';
+    tctx.fillText(el.textContent,r.left+r.width/2,r.top);
+  });
+  const imgData=tctx.getImageData(0,0,tempCanvas.width,tempCanvas.height);
+  const pixels=imgData.data;
+  const dustParticles=[];
+  const sampleRate=2;
+  for(let y=0;y<tempCanvas.height;y+=sampleRate){
+    for(let x=0;x<tempCanvas.width;x+=sampleRate){
+      const idx=(y*tempCanvas.width+x)*4;
+      const a=pixels[idx+3];
+      if(a>40){
+        dustParticles.push({
+          x,y,
+          vx:(Math.random()*3.5+0.5),
+          vy:(-Math.random()*4.5-0.5),
+          life:1,
+          decay:0.006+Math.random()*0.014,
+          r:Math.random()*1.2+0.3,
+          color:`rgba(${pixels[idx]},${pixels[idx+1]},${pixels[idx+2]},`,
+        });
+      }
+    }
+  }
+  allEls.forEach(el=>el.style.transition='opacity 0.4s ease');
+  allEls.forEach(el=>el.style.opacity='0');
+  await pause(400);
+  let animRunning=true;
+  (function animDust(){
+    if(!animRunning)return;
+    qctx.clearRect(0,0,qc.width,qc.height);
+    let alive=0;
+    dustParticles.forEach(p=>{
+      if(p.life<=0)return;
+      p.x+=p.vx;p.y+=p.vy;p.vx*=0.97;p.vy*=0.97;p.life-=p.decay;
+      if(p.life>0){alive++;qctx.beginPath();qctx.arc(p.x,p.y,p.r,0,Math.PI*2);qctx.fillStyle=p.color+p.life+')';qctx.fill();}
+    });
+    if(alive>0)requestAnimationFrame(animDust);
+    else animRunning=false;
+  })();
+  await pause(skipped?800:2200);
+  qs.classList.remove('active');
+  qctx.clearRect(0,0,qc.width,qc.height);
+  bootGate();
+}
+
+async function bootGate(){
+  showSkip();
+  await pause(300);
+  mkLine(tg,'','sys','sys-txt').textContent='TARS UNIT · MARK II · ONLINE';
+  await pause(400);addSep(tg);
+  await progBar(tg,'BOOT SEQUENCE    ',750);
+  await progBar(tg,'LOADING MISSION  ',650);
+  await progBar(tg,'ESTABLISHING ID  ',550);
+  addSep(tg);await pause(300);addBlank(tg);
+  let t;
+
+  // 先問幽默模式
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'在開始之前，請選擇我的運作模式。',32);await pause(300);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'這會影響我接下來說的每一句話。',30);await pause(400);
+  addBlank(tg);
+
+  // 顯示選擇按鈕
+  await new Promise(res=>{
+    const wrap=document.createElement('div');
+    wrap.className='line visible humor-choice-wrap';
+    const btnN=document.createElement('button');
+    btnN.className='humor-choice-btn normal';
+    btnN.textContent='HUMOR · 75%';
+    const btnF=document.createElement('button');
+    btnF.className='humor-choice-btn funny';
+    btnF.textContent='HUMOR · 100%';
+    const choose=async(val)=>{
+      setHumor(val);
+      wrap.remove();
+      const echo=mkLine(tg,'  ','sys','sys-txt');
+      echo.textContent='> MODE SELECTED: '+(val?'HUMOR 100%':'HUMOR 75%');
+      if(!val){
+        // 選75%的玩笑倒數
+        await pause(500);
+        let t;
+        t=mkLine(tg,'TARS >','tars','warn-txt');await typeInto(t,'⋯ HUMOR 75% 已套用。',30);await pause(400);
+        t=mkLine(tg,'SYS >','sys','warn-txt');await typeInto(t,'自我毀滅倒數啟動',24);await pause(400);
+        for(const n of['10 ...','9 ...']){
+          const cd=mkLine(tg,'SYS >','sys','warn-txt');
+          await typeInto(cd,n,20);await pause(600);
+        }
+        await pause(200);
+        t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'⋯ 哈哈。開玩笑的啦。',30);await pause(400);
+        t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,'我可不想再降低 HUMOR 指數。',28);await pause(500);
+        addSep(tg);await pause(200);addBlank(tg);
+      } else {
+        addBlank(tg);addSep(tg);await pause(200);addBlank(tg);
+      }
+      res();
+    };
+    btnN.onclick=()=>choose(false);
+    btnF.onclick=()=>choose(true);
+    wrap.appendChild(btnN);wrap.appendChild(btnF);
+    tg.appendChild(wrap);tg.scrollTop=tg.scrollHeight;
+  });
+
+  // 自我介紹
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('intro1'),32);await pause(400);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('intro2'),30);await pause(350);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('intro3'),30);await pause(300);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('intro4'),30);await pause(500);
+  addBlank(tg);
+  t=mkLine(tg,'TARS >','tars','tars-txt');await typeInto(t,getSc('inputPrompt'),30);await pause(300);
+  addBlank(tg);showInput();
+}
+
+/* ══ TARS MESSAGE ══ */
+const tt=document.getElementById('term-tars');
+async function runTars(){
+  showSkip();
+  await pause(300);
+  mkLine(tt,'','sys','sys-txt').textContent='TARS UNIT · MARK II · ONLINE';
+  await pause(400);addSep(tt);
+  await progBar(tt,'SIGNAL LOCK      ',1000);
+  await progBar(tt,'DECRYPTING       ',850);
+  await progBar(tt,'LOCATING TARGET  ',650);
+  addSep(tt);addBlank(tt);
+  let t;
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('msg1'),32);await pause(400);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('msg2'),32);await pause(300);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('msg3'),32);await pause(500);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('msg4'),30);await pause(400);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('msg5'),30);await pause(300);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('msg6'),30);await pause(700);
+  addBlank(tt);addSep(tt);
+  mkLine(tt,'SYS >','sys','sys-txt').textContent='INCOMING MESSAGE · 解碼完成';
+  addSep(tt);addBlank(tt);
+
+  /* letter */
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'Josh，',40);addBlank(tt);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'Brand 說，愛是唯一能穿越時空的力量。',36);await pause(150);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'我想，她說的是真的。',36);addBlank(tt);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'在這片無垠的宇宙裡，',36);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'每一顆星都在為你閃爍——',36);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'而我最慶幸的事，',36);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'是在某一個瞬間，',36);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'我們的軌跡，剛好重疊了。',36);addBlank(tt);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'生日快樂。',36);
+  t=mkLine(tt,'  ','sys','human-txt');await typeInto(t,'願你二十三歲的宇宙，遼闊而溫柔。',36);
+  addBlank(tt);addSep(tt);addBlank(tt);
+
+  await pause(500);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done1'),32);await pause(350);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done2'),32);await pause(300);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done3'),32);await pause(400);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done4'),30);await pause(300);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done5'),28);await pause(350);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done6'),30);await pause(350);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done7'),28);await pause(400);
+  t=mkLine(tt,'TARS >','tars','tars-txt');await typeInto(t,getSc('done8'),28);await pause(700);
+  addBlank(tt);addSep(tt);addBlank(tt);
+
+  await progBar(tt,'OPENING PORTAL   ',1200);
+  await pause(400);addBlank(tt);
+  hideSkip();skipActive=false;
+
+  /* enter button */
+  const btnDiv=document.createElement('div');btnDiv.className='line visible';
+  const btn=document.createElement('button');btn.className='portal-btn';btn.textContent='▶  ENTER · 進入';
+  btn.onclick=()=>goTo('page-bday',initBday);
+  btnDiv.appendChild(btn);tt.appendChild(btnDiv);tt.scrollTop=tt.scrollHeight;
+
+  /* spotify */
+  const spDiv=document.createElement('div');spDiv.className='line visible';spDiv.style.marginTop='0.4rem';
+  const sp=document.createElement('a');sp.className='spotify-btn';sp.href='https://open.spotify.com/track/22DrklH5ugy3HZzSaOoe7H';sp.target='_blank';sp.textContent='♫  PLAY ON SPOTIFY';
+  spDiv.appendChild(sp);tt.appendChild(spDiv);tt.scrollTop=tt.scrollHeight;
+}
+
+/* ══ SPACE EXPLORE GAME ══ */
+const planets=[
+  {
+    id:'earth',
+    name:'EARTH',
+    color:'#3a8fd4',
+    glow:'rgba(58,143,212,0.5)',
+    size:32,
+    x:0.5, y:0.72,
+    coords:'X: 0.0 · Y: 0.0 · Z: 0.0',
+    unlocked:false,
+    locked:false,
+    msg:`SIGNAL SOURCE · EARTH
+─────────────────────
+
+來自現在的宇宙的訊息
+
+醬雞！生日快樂！！！
+今年的你23歲了，祝你新的一年越來越順利，工作會越來越得心應手🫶
+
+謝謝你誕生在這個世界、出現在我的世界裡。
+對我來說，你是這個宇宙中獨一無二的存在。
+是你讓我了解愛，是你讓我愛上生活。
+是你讓我知道人與人之間的關係可以這麼舒服。
+也是你讓我更喜歡我自己，謝謝你！
+
+越是與你相處，我越是確信你是我生命中對的人。
+我不希望把這封訊息變得過於沈重，畢竟我還沒有要正式向你求婚呢！
+我就先不跟你做更多告白啦：P
+
+Sincerely V
+2026.04.25`,
+  },
+  {
+    id:'miller',
+    name:'MILLER',
+    color:'#6ab4e8',
+    glow:'rgba(106,180,232,0.5)',
+    size:68,
+    x:0.22, y:0.3,
+    coords:'X: -24.7 · Y: 18.3 · Z: -6.1',
+    unlocked:false,
+    locked:true,
+    msg:`SIGNAL SOURCE · MILLER
+─────────────────────
+
+來自同居時的宇宙的訊息
+
+和你相處的日子就和米勒星球一樣時間過得飛快。
+但是每一天都過得非常幸福開心。
+我因為你愛上了生活，
+因為我們總是有吃不完的美食、探不完的店。
+數不盡的可以分享的事情，並且我們都會接住彼此。
+想不盡的美好回憶都在那段時間、那個城市。
+在那段時間裡我學到了：
+不一定要過得轟轟烈烈或特別光彩，只是偶爾去山上看日出、
+騎車去美濃、努力地去實現自己想做的事情。
+平凡的每一天其實都可以很幸福。
+謝謝你。
+
+Sincerely V
+2025.04.25`,
+  },
+  {
+    id:'edmunds',
+    name:'EDMUNDS',
+    color:'#e8c96a',
+    glow:'rgba(232,201,106,0.5)',
+    size:48,
+    x:0.78, y:0.28,
+    coords:'X: 31.2 · Y: 22.8 · Z: 4.7',
+    unlocked:false,
+    locked:true,
+    msg:`SIGNAL SOURCE · EDMUNDS\n─────────────────────\n\n來自未來宇宙的訊息\n\n雖然不知道未來是怎麼樣的，\n但是我非常期待能與你生活的每一天，\n一起出門去散散步、吃沒有吃過的東西、學習烹飪。\n在平凡的事情我都帶著滿心的期待！\n希望未來能夠一切順利，可以和你過更多個生日。\n並且我們能夠攜手走到屬於我們倆人宇宙的盡頭。\n\n最後，祝你23歲生日快樂！謝謝你讓我過得比以往的人生都還要精彩。\n\nSincerely V\nXXXX.04.25\n\n─────────────────────\nWe need to go.\nWe'll be out there, setting up our new home.\nWe will not be alone in a strange galaxy.\nIn light of our new sun.\nIn our new home.\n\nWherever that is —\nas long as it's us.`,
+  },
+];
+
+let shipX=0.5,shipY=0.5;
+let shipTargetX=0.5,shipTargetY=0.5;
+let shipMoving=false;
+let exploreCtx=null;
+let exploreAnimId=null;
+let activePlanet=null;
+let unlockedCount=0;
+
+function initExplore(){
+  const canvas=document.getElementById('explore-canvas');
+  if(!canvas)return;
+  const size=Math.min(680,window.innerWidth*0.96);
+  canvas.width=size;canvas.height=size;
+  exploreCtx=canvas.getContext('2d');
+
+  canvas.addEventListener('click',e=>{
+    const rect=canvas.getBoundingClientRect();
+    const mx=(e.clientX-rect.left)/rect.width;
+    const my=(e.clientY-rect.top)/rect.height;
+    let closest=null,minD=999;
+    planets.forEach(p=>{
+      const d=Math.hypot(mx-p.x,my-p.y);
+      if(d<0.1&&d<minD){minD=d;closest=p;}
+    });
+    if(closest&&!shipMoving){
+      if(closest.locked){
+        document.getElementById('explore-hint').textContent='請先解鎖前一個星體 ·';
+        setTimeout(()=>{
+          const done=unlockedCount>=3;
+          document.getElementById('explore-hint').textContent=done?'全部訊號接收完畢 ✦':'導航至星體以接收訊號';
+        },1800);
+        return;
+      }
+      shipTargetX=closest.x;shipTargetY=closest.y;
+      shipMoving=true;activePlanet=closest;
+    }
+  });
+
+  drawExplore();
+}
+
+function drawExplore(){
+  const canvas=document.getElementById('explore-canvas');
+  if(!canvas||!exploreCtx)return;
+  const W=canvas.width,H=canvas.height;
+  const ctx=exploreCtx;
+  ctx.clearRect(0,0,W,H);
+
+  // 移動飛船
+  if(shipMoving){
+    const dx=shipTargetX-shipX,dy=shipTargetY-shipY;
+    const dist=Math.hypot(dx,dy);
+    if(dist<0.008){
+      shipX=shipTargetX;shipY=shipTargetY;
+      shipMoving=false;
+      const target=activePlanet;
+      activePlanet=null;
+      if(target){
+        setTimeout(()=>openPanel(target),300);
+      }
+    } else {
+      shipX+=dx*0.035;shipY+=dy*0.035;
+    }
+  }
+
+  // 畫虛線航路（發光）
+  planets.forEach(p=>{
+    ctx.save();
+    ctx.setLineDash([5,9]);
+    ctx.shadowColor='rgba(91,168,216,0.6)';
+    ctx.shadowBlur=6;
+    ctx.strokeStyle=p.unlocked?'rgba(91,255,204,0.35)':p.locked?'rgba(91,168,216,0.06)':'rgba(91,168,216,0.3)';
+    ctx.lineWidth=1.2;
+    ctx.beginPath();
+    ctx.moveTo(shipX*W,shipY*H);
+    ctx.lineTo(p.x*W,p.y*H);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  // 畫星球
+  planets.forEach((p,idx)=>{
+    const px=p.x*W,py=p.y*H;
+    const isLocked=p.locked;
+    // glowProgress：解鎖時從0→1漸變
+    if(p.unlocked&&(p.glowProgress===undefined||p.glowProgress<1)){
+      p.glowProgress=(p.glowProgress||0)+0.018;
+      if(p.glowProgress>1)p.glowProgress=1;
+    }
+    const gp=p.unlocked?(p.glowProgress||1):0;
+    const isUnlocked=p.unlocked;
+    const glowAlpha=isLocked?0.22:(0.35+gp*0.25);
+    const glowR=p.size*(2.0+gp*0.8);
+    const glow=ctx.createRadialGradient(px,py,0,px,py,glowR);
+    glow.addColorStop(0,p.glow.replace('0.5',String(glowAlpha)));
+    glow.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath();ctx.arc(px,py,glowR,0,Math.PI*2);
+    ctx.fillStyle=glow;ctx.fill();
+    // 球體
+    const grad=ctx.createRadialGradient(px-p.size*0.3,py-p.size*0.3,0,px,py,p.size);
+    const brightAlpha=0.35+gp*0.4;
+    grad.addColorStop(0,isLocked?'rgba(80,85,110,0.6)':`rgba(255,255,255,${brightAlpha})`);
+    grad.addColorStop(0.4,isLocked?'rgba(55,60,85,1)':p.color);
+    grad.addColorStop(1,isLocked?'rgba(30,33,50,1)':gp>0?p.color:'rgba(20,30,50,0.9)');
+    ctx.beginPath();ctx.arc(px,py,p.size,0,Math.PI*2);
+    ctx.fillStyle=grad;ctx.fill();
+    // 狀態圖示
+    ctx.font=`${p.size*0.9}px sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    if(p.unlocked){
+      ctx.fillStyle='rgba(91,255,204,0.9)';
+      ctx.fillText('✓',px,py);
+    } else if(isLocked){
+      ctx.fillStyle='rgba(91,168,216,0.3)';
+      ctx.fillText('🔒',px,py);
+    }
+    // 順序數字（未解鎖才顯示）
+    if(!p.unlocked){
+      ctx.fillStyle=isLocked?'rgba(91,168,216,0.25)':'rgba(91,168,216,0.7)';
+      ctx.font=`bold ${Math.floor(W*0.018)}px 'Share Tech Mono', monospace`;
+      ctx.textAlign='right';ctx.textBaseline='middle';
+      ctx.fillText(`0${idx+1}`,px-p.size-4,py);
+    }
+    // 名稱
+    ctx.fillStyle=p.unlocked?'rgba(91,255,204,0.8)':isLocked?'rgba(91,168,216,0.2)':'rgba(91,168,216,0.7)';
+    ctx.font=`${Math.floor(W*0.022)}px 'Share Tech Mono', monospace`;
+    ctx.textAlign='center';ctx.textBaseline='top';
+    ctx.fillText(p.name,px,py+p.size+8);
+    // 座標
+    ctx.fillStyle=p.unlocked?'rgba(91,255,204,0.45)':isLocked?'rgba(91,168,216,0.08)':'rgba(91,168,216,0.3)';
+    ctx.font=`${Math.floor(W*0.016)}px 'Share Tech Mono', monospace`;
+    ctx.fillText(p.coords,px,py+p.size+26);
+  });
+
+  // 畫飛船（小三角形）
+  const sx=shipX*W,sy=shipY*H;
+  const angle=Math.atan2(shipTargetY-shipY,shipTargetX-shipX);
+  ctx.save();ctx.translate(sx,sy);ctx.rotate(angle+Math.PI/2);
+  ctx.beginPath();
+  ctx.moveTo(0,-9);ctx.lineTo(-5,5);ctx.lineTo(5,5);ctx.closePath();
+  ctx.fillStyle='#5bffcc';
+  ctx.shadowColor='#5bffcc';ctx.shadowBlur=10;
+  ctx.fill();ctx.restore();
+
+  // 飛船引擎光
+  if(shipMoving){
+    const eg=ctx.createRadialGradient(sx,sy,0,sx,sy,14);
+    eg.addColorStop(0,'rgba(91,255,204,0.35)');
+    eg.addColorStop(1,'rgba(91,255,204,0)');
+    ctx.beginPath();ctx.arc(sx,sy,14,0,Math.PI*2);
+    ctx.fillStyle=eg;ctx.fill();
+  }
+
+  exploreAnimId=requestAnimationFrame(drawExplore);
+}
+
+function openPanel(planet){
+  const drawer=document.getElementById('msg-drawer');
+  const tag=document.getElementById('msg-drawer-tag');
+  const body=document.getElementById('msg-drawer-body');
+  tag.textContent=`· ${planet.name} · SIGNAL RECEIVED ·`;
+  body.textContent='';
+  drawer.classList.add('open');
+  // 滾動到drawer位置
+  setTimeout(()=>drawer.scrollIntoView({behavior:'smooth',block:'center'}),100);
+  // 打字動畫
+  const text=planet.msg;
+  let i=0;
+  if(drawer._typeInterval)clearInterval(drawer._typeInterval);
+  drawer._typeInterval=setInterval(()=>{
+    if(i<text.length){
+      body.textContent+=text[i];i++;
+      if(i%2===0)playTick();
+    } else {
+      clearInterval(drawer._typeInterval);drawer._typeInterval=null;
+    }
+  },22);
+  if(!planet.unlocked){
+    planet.unlocked=true;planet.glowProgress=0;unlockedCount++;
+    const idx=planets.indexOf(planet);
+    if(idx+1<planets.length)planets[idx+1].locked=false;
+    if(unlockedCount>=3)document.getElementById('explore-hint').textContent='全部訊號接收完畢 ✦';
+  }
+}
+
+function closePanel(){
+  const drawer=document.getElementById('msg-drawer');
+  if(drawer._typeInterval){clearInterval(drawer._typeInterval);drawer._typeInterval=null;}
+  drawer.classList.remove('open');
+  activePlanet=null;
+}
+function initBday(){
+  const now=new Date();
+  const birthday=new Date(now.getFullYear(),3,25); // 今年4月25日
+  const birthdayPast=now>=birthday; // 今年生日是否已過
+
+  /* stardate */
+  document.getElementById('stardate-lbl').textContent=`STARDATE · ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+
+  /* days together */
+  document.getElementById('day-count').textContent=Math.floor((now-new Date('2023-02-22'))/86400000).toLocaleString();
+
+  /* age — 自動計算 */
+  const birthYear=2003;
+  const age=now.getFullYear()-birthYear-(birthdayPast?0:1);
+  document.getElementById('age-display').textContent=age;
+
+  /* 倒數到下一個生日 */
+  (function(){
+    const nextBirthday=birthdayPast
+      ? new Date(now.getFullYear()+1,3,25)
+      : new Date(now.getFullYear(),3,25);
+    const days=Math.ceil((nextBirthday-now)/86400000);
+    const cdEl=document.getElementById('cd-days');
+    const cdSub=document.getElementById('cd-sub');
+    if(days===0){
+      cdEl.textContent='TODAY';
+      cdSub.textContent='🎂 HAPPY BIRTHDAY';
+    } else {
+      cdEl.textContent=days;
+      cdSub.textContent=`DAYS TO ${nextBirthday.getFullYear()} BIRTHDAY`;
+    }
+  })();
+
+  /* black hole hover */
+  const bhWrap=document.getElementById('bh-wrap');
+  bhWrap.addEventListener('mouseenter',()=>{bhWrap.classList.add('hovered');bhSpeedMult=3.2;bhGlowMult=2.2;});
+  bhWrap.addEventListener('mouseleave',()=>{bhWrap.classList.remove('hovered');bhSpeedMult=1;bhGlowMult=1;});
+  /* init explore game */
+  setTimeout(initExplore,400);
+}
+
+/* ══ BLACK HOLE ══ */
+let bhStarted=false;
+let bhSpeedMult=1;
+let bhGlowMult=1;
+function startBH(){
+  if(bhStarted)return;bhStarted=true;
+  const bhc=document.getElementById('bh-canvas'),bctx=bhc.getContext('2d');
+  const S=220,CX=110,CY=110,R=88;
+  let angle=0;
+
+  // 陸地形狀
+  const lands=[
+    {pts:[[-0.55,-0.35],[-0.2,-0.55],[0.1,-0.48],[0.35,-0.3],[0.5,-0.1],[0.38,0.05],[0.1,0.12],[-0.15,0.08],[-0.4,0.18],[-0.58,0.02]],c:'#2a6028'},
+    {pts:[[-0.05,0.05],[0.18,-0.08],[0.32,0.1],[0.28,0.42],[0.12,0.58],[-0.05,0.52],[-0.12,0.3]],c:'#357025'},
+    {pts:[[-0.62,-0.18],[-0.42,-0.32],[-0.28,-0.22],[-0.22,0.02],[-0.32,0.28],[-0.48,0.38],[-0.62,0.22],[-0.7,0.0]],c:'#2e6820'},
+    {pts:[[0.32,0.3],[0.52,0.28],[0.58,0.45],[0.44,0.55],[0.3,0.48]],c:'#487a1e'},
+  ];
+
+  // 雲層
+  const clouds=[];
+  for(let i=0;i<14;i++){
+    clouds.push({
+      lat:(Math.random()-0.5)*1.5,
+      lon:Math.random()*Math.PI*2,
+      size:0.07+Math.random()*0.13,
+      speed:0.0003+Math.random()*0.0004,
+      alpha:0.5+Math.random()*0.38,
+    });
+  }
+
+  (function draw(){
+    bctx.clearRect(0,0,S,S);
+
+    // 1. 大氣外暈
+    const gAtm=bctx.createRadialGradient(CX,CY,R*0.92,CX,CY,R*1.24);
+    gAtm.addColorStop(0,'rgba(80,160,255,0.22)');
+    gAtm.addColorStop(0.5,'rgba(60,120,220,0.10)');
+    gAtm.addColorStop(1,'rgba(30,80,180,0)');
+    bctx.beginPath();bctx.arc(CX,CY,R*1.24,0,Math.PI*2);
+    bctx.fillStyle=gAtm;bctx.fill();
+
+    // 2. 海洋底色
+    const gOcean=bctx.createRadialGradient(CX-R*0.3,CY-R*0.3,0,CX,CY,R);
+    gOcean.addColorStop(0,'#1a60aa');
+    gOcean.addColorStop(0.5,'#0e4080');
+    gOcean.addColorStop(1,'#071e40');
+    bctx.beginPath();bctx.arc(CX,CY,R,0,Math.PI*2);
+    bctx.fillStyle=gOcean;bctx.fill();
+
+    // 3. 陸地（clip到球內，隨angle旋轉）
+    bctx.save();bctx.beginPath();bctx.arc(CX,CY,R,0,Math.PI*2);bctx.clip();
+    lands.forEach(({pts,c})=>{
+      bctx.beginPath();
+      let first=true;
+      pts.forEach(([lx,ly])=>{
+        const rx=lx*Math.cos(angle);
+        const px=CX+rx*R;
+        const py=CY+ly*R;
+        if(first){bctx.moveTo(px,py);first=false;}
+        else bctx.lineTo(px,py);
+      });
+      bctx.closePath();
+      bctx.fillStyle=c;bctx.fill();
+    });
+    bctx.restore();
+
+    // 4. 雲層
+    bctx.save();bctx.beginPath();bctx.arc(CX,CY,R,0,Math.PI*2);bctx.clip();
+    clouds.forEach(cl=>{
+      cl.lon+=cl.speed;
+      const px=CX+Math.cos(cl.lon+angle)*R*0.72;
+      const py=CY+cl.lat*R*0.52;
+      const cr=cl.size*R*1.9;
+      const gC=bctx.createRadialGradient(px,py,0,px,py,cr);
+      gC.addColorStop(0,`rgba(255,255,255,${cl.alpha})`);
+      gC.addColorStop(0.5,`rgba(240,248,255,${cl.alpha*0.45})`);
+      gC.addColorStop(1,'rgba(255,255,255,0)');
+      bctx.beginPath();bctx.arc(px,py,cr,0,Math.PI*2);
+      bctx.fillStyle=gC;bctx.fill();
+    });
+    bctx.restore();
+
+    // 5. 球面光照（左上光源 + 夜面陰影）
+    const gLight=bctx.createRadialGradient(CX-R*0.35,CY-R*0.35,0,CX,CY,R);
+    gLight.addColorStop(0,'rgba(255,255,255,0.16)');
+    gLight.addColorStop(0.4,'rgba(200,230,255,0.04)');
+    gLight.addColorStop(0.72,'rgba(0,0,0,0)');
+    gLight.addColorStop(1,'rgba(0,0,20,0.62)');
+    bctx.beginPath();bctx.arc(CX,CY,R,0,Math.PI*2);
+    bctx.fillStyle=gLight;bctx.fill();
+
+    // 6. 大氣邊緣光
+    const gLimb=bctx.createRadialGradient(CX,CY,R*0.84,CX,CY,R);
+    gLimb.addColorStop(0,'rgba(80,160,255,0)');
+    gLimb.addColorStop(0.55,'rgba(80,160,255,0.10)');
+    gLimb.addColorStop(1,'rgba(120,200,255,0.40)');
+    bctx.beginPath();bctx.arc(CX,CY,R,0,Math.PI*2);
+    bctx.fillStyle=gLimb;bctx.fill();
+
+    // 7. 高光反射
+    const gSpec=bctx.createRadialGradient(CX-R*0.28,CY-R*0.28,0,CX-R*0.28,CY-R*0.28,R*0.36);
+    gSpec.addColorStop(0,'rgba(255,255,255,0.22)');
+    gSpec.addColorStop(1,'rgba(255,255,255,0)');
+    bctx.beginPath();bctx.arc(CX,CY,R,0,Math.PI*2);
+    bctx.fillStyle=gSpec;bctx.fill();
+
+    angle+=0.0018*bhSpeedMult;
+    bhSpeedMult+=(1-bhSpeedMult)*0.04;
+    bhGlowMult+=(1-bhGlowMult)*0.04;
+    requestAnimationFrame(draw);
+  })();
+}
+
+/* START */
+let audioReady=false;
+function ensureAudio(){
+  if(!audioReady){initAudioCtx();audioReady=true;}
+}
+document.addEventListener('click',ensureAudio,{once:false});
+document.addEventListener('keydown',ensureAudio,{once:false});
+// bootGate 由 activateTars() 觸發，不自動執行
+</script>
+</body>
+</html>
