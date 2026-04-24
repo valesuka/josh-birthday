@@ -1368,5 +1368,25 @@ document.addEventListener('click',ensureAudio,{once:false});
 document.addEventListener('keydown',ensureAudio,{once:false});
 // bootGate 由 activateTars() 觸發，不自動執行
 </script>
+  <audio id="bgm" loop preload="auto">
+  <source src="Interstellar_Main_Theme_-_Hans_Zimmer.mp3" type="audio/mpeg">
+</audio>
+<script>
+document.addEventListener('click', function startBgm(){
+  const bgm = document.getElementById('bgm');
+  if(bgm.paused){
+    bgm.volume = 0;
+    bgm.play().catch(()=>{});
+    // 慢慢淡入
+    let vol = 0;
+    const fade = setInterval(()=>{
+      vol = Math.min(vol + 0.02, 0.35);
+      bgm.volume = vol;
+      if(vol >= 0.35) clearInterval(fade);
+    }, 80);
+  }
+  document.removeEventListener('click', startBgm);
+}, {once: true});
+</script>
 </body>
 </html>
